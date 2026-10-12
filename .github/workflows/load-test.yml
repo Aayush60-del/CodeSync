@@ -1,0 +1,64 @@
+name: WebSocket Load Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      vus:
+        description: Concurrent WebSocket clients
+        required: true
+        default: '20'
+      duration:
+        description: Test duration
+        required: true
+        default: '30s'
+
+permissions:
+  contents: read
+
+jobs:
+  websocket-load:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: codesync
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: codesync-ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d codesync"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: grafana/setup-k6-action@v1
+      - run: ./mvnw --batch-mode -DskipTests package
+      - name: Start backend
+        env:
+          DB_URL: jdbc:postgresql://localhost:5432/codesync
+          DB_USERNAME: postgres
+          DB_PASSWORD: codesync-ci-password
+          JWT_SECRET: ci-only-secret-that-is-at-least-32-characters-long
+        run: |
+          nohup java -jar target/codesync-0.0.1-SNAPSHOT.jar > /tmp/codesync-backend.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            status=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/rooms/INVALID)
+            if [ "$status" = "404" ]; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/codesync-backend.log
+          exit 1
+      - name: Run WebSocket load check
+        env:
+          BASE_URL: http://localhost:8080
+          K6_VUS: ${{ inputs.vus }}
+          K6_DURATION: ${{ inputs.duration }}
+        run: k6 run --vus "$K6_VUS" --duration "$K6_DURATION" tests/load/websocket.js

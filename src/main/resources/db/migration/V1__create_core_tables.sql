@@ -1,0 +1,18 @@
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY,
+    username VARCHAR(255) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS rooms (
+    id UUID PRIMARY KEY,
+    code VARCHAR(6),
+    name VARCHAR(255),
+    owner_id UUID REFERENCES users(id),
+    created_at TIMESTAMP
+);
+
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS code VARCHAR(6);
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS owner_id UUID REFERENCES users(id);

@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #0f172a;
+  background: #f5f7fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.editor-surface,
+.editor-surface .cm-editor {
+  height: 100%;
+}
+
+.editor-surface .cm-editor {
+  font-size: 13px;
+}
+
+.editor-surface .cm-scroller {
+  overflow: auto;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  line-height: 1.75;
+}
+
+.editor-surface .cm-content {
+  padding-top: 18px;
+  padding-bottom: 24px;
+}
+
+.editor-surface .cm-gutters {
+  border-right: 1px solid rgb(255 255 255 / 6%);
+}
+
+.editor-surface .cm-focused {
+  outline: none;
+}
+
+.editor-surface .cm-line .ͼw {
+  color: #a8b1c0 !important;
+}
+
+.editor-surface .cm-line .ͼq {
+  color: #ff858e !important;
+}
+
+::selection {
+  background: rgb(99 102 241 / 20%);
+}
+
+main.grid.min-h-screen > section > div:last-child {
+  color: #626d7d;
+}

@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - run: ./mvnw --batch-mode clean verify
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm audit --audit-level=moderate
+      - run: npm run build
+
+  browser:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: codesync
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: codesync-ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d codesync"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: ./mvnw --batch-mode -DskipTests package
+      - name: Prepare legacy PostgreSQL schema
+        env:
+          PGPASSWORD: codesync-ci-password
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+          psql -h localhost -U postgres -d codesync -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE users (
+            id uuid PRIMARY KEY,
+            username varchar(255) NOT NULL UNIQUE,
+            email varchar(255) NOT NULL UNIQUE,
+            password_hash varchar(255) NOT NULL,
+            created_at timestamp NOT NULL
+          );
+          CREATE TABLE rooms (
+            id uuid PRIMARY KEY,
+            code varchar(6) UNIQUE,
+            name varchar(255),
+            owner_id uuid NOT NULL,
+            created_at timestamp
+          );
+          INSERT INTO users (id, username, email, password_hash, created_at)
+          VALUES ('00000000-0000-0000-0000-000000000001', 'legacy-owner', 'legacy@example.test', 'unused', now());
+          INSERT INTO rooms (id, code, name, owner_id, created_at)
+          VALUES ('00000000-0000-0000-0000-000000000002', NULL, 'Legacy room', '00000000-0000-0000-0000-000000000001', now());
+          SQL
+      - name: Start backend
+        env:
+          DB_URL: jdbc:postgresql://localhost:5432/codesync
+          DB_USERNAME: postgres
+          DB_PASSWORD: codesync-ci-password
+          JWT_SECRET: ci-only-secret-that-is-at-least-32-characters-long
+        run: |
+          nohup java -jar target/codesync-0.0.1-SNAPSHOT.jar > /tmp/codesync-backend.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            status=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/rooms/INVALID)
+            if [ "$status" = "404" ]; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/codesync-backend.log
+          exit 1
+      - name: Verify legacy room migration
+        env:
+          PGPASSWORD: codesync-ci-password
+        run: |
+          migrated_code=$(psql -h localhost -U postgres -d codesync -Atc "SELECT code FROM rooms WHERE id = '00000000-0000-0000-0000-000000000002'")
+          test "${#migrated_code}" = 6
+          owner_nullable=$(psql -h localhost -U postgres -d codesync -Atc "SELECT is_nullable FROM information_schema.columns WHERE table_name = 'rooms' AND column_name = 'owner_id'")
+          test "$owner_nullable" = YES
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm run test:e2e
+        working-directory: frontend
+        env:
+          CI: true
+
+  codeql:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: java,javascript-typescript
+      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/analyze@v3
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

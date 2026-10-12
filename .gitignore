@@ -1,0 +1,48 @@
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/frontend/node_modules/
+/frontend/dist/
+/frontend/playwright-report/
+/frontend/test-results/
+/.env
+/.env.*
+!/.env.example
+/backend.env
+/backend.env.local
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+# Local OS artifacts copied into the workspace
+/%SystemDrive%/
+
+# IDE modernization agent logs and plans
+/.github/modernize/
